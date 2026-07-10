@@ -508,6 +508,25 @@ input, select {
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .form-error { color: var(--red); font-size: 13px; font-weight: 500; }
 
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.4;
+}
+.checkbox-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+input:disabled { opacity: 0.45; cursor: not-allowed; }
+
 /* --- Toasts / drop overlay ------------------------------------------------------ */
 
 #toasts {

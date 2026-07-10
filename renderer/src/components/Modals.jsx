@@ -75,6 +75,7 @@ export function ConfirmModal({ title, body, confirmLabel, danger, onResult }) {
 export function GenerateModal({ onClose, onDone }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [anonymous, setAnonymous] = useState(false);
   const [pass, setPass] = useState('');
   const [pass2, setPass2] = useState('');
   const [error, setError] = useState(null);
@@ -83,14 +84,19 @@ export function GenerateModal({ onClose, onDone }) {
   useEffect(() => nameRef.current?.focus(), []);
 
   const generate = async () => {
-    if (!name.trim() || !email.trim()) return setError('Name and email are required.');
+    if (!anonymous && (!name.trim() || !email.trim())) return setError('Name and email are required.');
     if (pass.length < 8) return setError('Use a passphrase of at least 8 characters.');
     if (pass !== pass2) return setError('Passphrases do not match.');
     setError(null);
     setBusy(true);
     try {
-      await call('generateKey', { name: name.trim(), email: email.trim(), passphrase: pass });
-      onDone(name.trim());
+      await call('generateKey', {
+        name: name.trim(),
+        email: email.trim(),
+        passphrase: pass,
+        anonymous,
+      });
+      onDone(anonymous ? 'Anonymous keypair' : `Keypair for ${name.trim()}`);
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -102,9 +108,9 @@ export function GenerateModal({ onClose, onDone }) {
       <h2>New keypair</h2>
       <p className="modal-sub">Creates a modern ECC (Curve25519) key, protected by your passphrase.</p>
       <div className="form-grid">
-        <input ref={nameRef} type="text" placeholder="Name" value={name}
+        <input ref={nameRef} type="text" placeholder="Name" value={name} disabled={anonymous}
                onChange={(e) => setName(e.target.value)} autoComplete="off" />
-        <input type="email" placeholder="Email" value={email}
+        <input type="email" placeholder="Email" value={email} disabled={anonymous}
                onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
         <input type="password" placeholder="Passphrase (min 8 characters)" value={pass}
                onChange={(e) => setPass(e.target.value)} autoComplete="off" />
@@ -112,6 +118,16 @@ export function GenerateModal({ onClose, onDone }) {
                onChange={(e) => setPass2(e.target.value)} autoComplete="off"
                onKeyDown={(e) => e.key === 'Enter' && generate()} />
       </div>
+      <label className="checkbox-row">
+        <input
+          type="checkbox"
+          checked={anonymous}
+          onChange={(e) => setAnonymous(e.target.checked)}
+        />
+        <span>
+          Anonymous key — no name or email embedded in the key
+        </span>
+      </label>
       <p className="modal-note">
         There is no way to recover a forgotten passphrase — store it somewhere safe.
       </p>

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { avatarHue, formatFingerprint, initials, parseUserID } from '../api.js';
+import { avatarHue, formatFingerprint, initials, keyLabel, parseUserID } from '../api.js';
 
 function KeyCard({ keyData, toast, onExport, onDelete }) {
-  const { name, email } = parseUserID(keyData.userIDs[0]);
+  const name = keyLabel(keyData);
+  const { email } = parseUserID(keyData.userIDs[0]);
   const hue = avatarHue(keyData.fingerprint);
 
   const copyFingerprint = async () => {
@@ -52,6 +53,7 @@ export default function KeysView({
   const q = search.trim().toLowerCase();
   const matches = (k) =>
     !q ||
+    keyLabel(k).toLowerCase().includes(q) ||
     k.userIDs.join(' ').toLowerCase().includes(q) ||
     k.fingerprint.toLowerCase().includes(q.replace(/\s/g, ''));
 

@@ -38,11 +38,12 @@ hF4DDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMO
 
 const demo = {
   listKeys: async () => [...demoKeys],
-  generateKey: async ({ name, email }) => {
+  generateKey: async ({ name, email, anonymous }) => {
     demoKeys.push({
       ...demoKeys[0],
       fingerprint: Math.random().toString(16).slice(2).padEnd(40, '0').toUpperCase().slice(0, 40),
-      userIDs: [`${name} <${email}>`],
+      keyID: Math.random().toString(16).slice(2).padEnd(16, '0').toUpperCase().slice(0, 16),
+      userIDs: anonymous ? [''] : [`${name} <${email}>`],
     });
     return { status: 'added' };
   },
@@ -81,10 +82,12 @@ export async function call(name, payload) {
 export function parseUserID(userID) {
   const match = /^(.*?)\s*<(.+)>$/.exec(userID || '');
   if (match) return { name: match[1] || match[2], email: match[2] };
-  return { name: userID || '(no user ID)', email: '' };
+  return { name: userID || 'Anonymous key', email: '' };
 }
 
 export function keyLabel(key) {
+  // Anonymous keys have no user ID — use the short key ID to tell them apart.
+  if (!key.userIDs[0]) return `Anonymous (${key.keyID.slice(-8)})`;
   return parseUserID(key.userIDs[0]).name;
 }
 
@@ -97,6 +100,7 @@ export function avatarHue(fpr) {
 }
 
 export function initials(userID) {
+  if (!userID) return '?';
   const { name } = parseUserID(userID);
   return name
     .split(/\s+/)

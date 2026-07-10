@@ -304,7 +304,7 @@ export default function App() {
           onClose={() => setGenOpen(false)}
           onDone={async (label) => {
             setGenOpen(false);
-            toast(`Keypair for ${label} generated`, 'success');
+            toast(`${label} generated`, 'success');
             await refreshKeys();
           }}
         />

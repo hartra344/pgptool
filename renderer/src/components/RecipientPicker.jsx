@@ -20,6 +20,7 @@ export default function RecipientPicker({ keys, selected, onChange }) {
       .filter(
         (k) =>
           !q ||
+          keyLabel(k).toLowerCase().includes(q) ||
           k.userIDs.join(' ').toLowerCase().includes(q) ||
           k.fingerprint.toLowerCase().includes(q.replace(/\s/g, ''))
       )
@@ -99,7 +100,8 @@ export default function RecipientPicker({ keys, selected, onChange }) {
       {open && options.length > 0 && (
         <div className="dropdown">
           {options.map((key, i) => {
-            const { name, email } = parseUserID(key.userIDs[0]);
+            const name = keyLabel(key);
+            const { email } = parseUserID(key.userIDs[0]);
             return (
               <button
                 key={key.fingerprint}

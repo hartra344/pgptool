@@ -169,13 +169,14 @@ ipcMain.handle('keys:list', wrap(async () => {
   return list;
 }));
 
-ipcMain.handle('keys:generate', wrap(async ({ name, email, passphrase }) => {
-  if (!name || !email) throw new Error('Name and email are required');
+ipcMain.handle('keys:generate', wrap(async ({ name, email, passphrase, anonymous }) => {
+  if (!anonymous && (!name || !email)) throw new Error('Name and email are required');
   if (!passphrase) throw new Error('A passphrase is required to protect the private key');
   const { privateKey } = await openpgp.generateKey({
     type: 'ecc',
     curve: 'curve25519Legacy',
-    userIDs: [{ name, email }],
+    // An empty user ID yields a key with no embedded identity.
+    userIDs: [anonymous ? {} : { name, email }],
     passphrase,
     format: 'armored',
   });
