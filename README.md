@@ -18,7 +18,7 @@ A cross-platform desktop app (macOS Apple Silicon + Windows) for managing PGP ke
 
 ```bash
 npm install
-npm run dev     # Vite dev server + Electron with hot reload
+npm run dev     # Vite dev server + Electron; UI hot-reloads, Electron auto-restarts on src/ changes
 npm start       # production build + Electron
 ```
 

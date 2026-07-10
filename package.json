@@ -6,7 +6,7 @@
   "author": "Travis Vu <ttha3928@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5183 && cross-env VITE_DEV_SERVER_URL=http://localhost:5183 electron .\"",
+    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5183 && cross-env VITE_DEV_SERVER_URL=http://localhost:5183 electronmon .\"",
     "build:renderer": "vite build",
     "start": "npm run build:renderer && electron .",
     "dist:mac": "npm run build:renderer && electron-builder --mac --arm64",
@@ -22,10 +22,19 @@
     "cross-env": "^7.0.3",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
+    "electronmon": "^2.0.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "vite": "^6.0.3",
     "wait-on": "^8.0.1"
+  },
+  "electronmon": {
+    "patterns": [
+      "!renderer/**",
+      "!dist/**",
+      "!.claude/**",
+      "!README.md"
+    ]
   },
   "build": {
     "appId": "com.travisvu.pgptool",
@@ -37,13 +46,28 @@
     "mac": {
       "category": "public.app-category.utilities",
       "target": [
-        { "target": "dmg", "arch": ["arm64"] },
-        { "target": "zip", "arch": ["arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
       ]
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
