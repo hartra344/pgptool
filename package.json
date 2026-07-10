@@ -1,0 +1,54 @@
+{
+  "name": "pgptool",
+  "version": "2.0.0",
+  "description": "Manage PGP keys and encrypt/decrypt messages",
+  "main": "src/main.js",
+  "author": "Travis Vu <ttha3928@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5183 && cross-env VITE_DEV_SERVER_URL=http://localhost:5183 electron .\"",
+    "build:renderer": "vite build",
+    "start": "npm run build:renderer && electron .",
+    "dist:mac": "npm run build:renderer && electron-builder --mac --arm64",
+    "dist:win": "npm run build:renderer && electron-builder --win --x64",
+    "dist": "npm run build:renderer && electron-builder --mac --arm64 --win --x64"
+  },
+  "dependencies": {
+    "openpgp": "^6.0.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^6.0.3",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.travisvu.pgptool",
+    "productName": "PGP Tool",
+    "files": [
+      "src/**/*",
+      "renderer/dist/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
+      ]
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
