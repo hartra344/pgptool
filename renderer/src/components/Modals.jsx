@@ -174,6 +174,76 @@ export function PasteModal({ initialText, onClose, onImport }) {
 
 // ---------------------------------------------------------------------------
 
+export function ExportAllModal({ keys, toast, onClose }) {
+  const [includePrivate, setIncludePrivate] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const privCount = keys.filter((k) => k.isPrivate).length;
+  const pubCount = keys.length - privCount;
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const result = await call('exportAll', { includePrivate });
+      if (result) {
+        toast(
+          `Exported ${result.privCount ? `${result.privCount} private + ` : ''}${result.pubCount} public key${result.pubCount === 1 ? '' : 's'} to ${result.path}`,
+          'success'
+        );
+        onClose();
+      }
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ModalShell onClose={() => !busy && onClose()}>
+      <h2>Export all keys</h2>
+      <p className="modal-sub">
+        Saves your whole keyring ({privCount} private, {pubCount} public) as a single{' '}
+        <code>.asc</code> file. Restore it with “Import file…” here, or <code>gpg --import</code>.
+      </p>
+      <label className={'radio-card' + (!includePrivate ? ' selected' : '')}>
+        <input
+          type="radio"
+          name="export-all-mode"
+          checked={!includePrivate}
+          onChange={() => setIncludePrivate(false)}
+        />
+        <span>
+          <strong>Public keys only</strong>
+          <em>Safe to share — lets others encrypt to every key you have.</em>
+        </span>
+      </label>
+      <label className={'radio-card' + (includePrivate ? ' selected' : '')}>
+        <input
+          type="radio"
+          name="export-all-mode"
+          checked={includePrivate}
+          onChange={() => setIncludePrivate(true)}
+        />
+        <span>
+          <strong>Full backup — includes private keys</strong>
+          <em>
+            Keep this file safe. Private keys stay protected by their passphrases, but anyone
+            holding the file can try to guess them.
+          </em>
+        </span>
+      </label>
+      <div className="modal-actions">
+        <button className="btn ghost" onClick={onClose} disabled={busy}>Cancel</button>
+        <button className={'btn ' + (includePrivate ? 'danger-solid' : 'primary')} onClick={save} disabled={busy}>
+          {busy ? 'Exporting…' : includePrivate ? 'Save full backup…' : 'Save public keys…'}
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 export function ExportModal({ exportReq, toast, onClose }) {
   const { key, includePrivate, armored } = exportReq;
   const { email } = parseUserID(key.userIDs[0]);

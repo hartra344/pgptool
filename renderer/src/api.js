@@ -56,6 +56,13 @@ const demo = {
   },
   exportKey: async () => '-----BEGIN PGP PUBLIC KEY BLOCK-----\n(demo key)\n-----END PGP PUBLIC KEY BLOCK-----',
   exportKeyFile: async () => null,
+  exportAll: async ({ includePrivate }) => ({
+    path: '/demo/pgptool-backup.asc',
+    privCount: includePrivate ? demoKeys.filter((k) => k.isPrivate).length : 0,
+    pubCount: includePrivate
+      ? demoKeys.filter((k) => !k.isPrivate).length
+      : demoKeys.length,
+  }),
   lockSession: async () => true,
   encrypt: async () => DEMO_ARMORED,
   decrypt: async () => ({

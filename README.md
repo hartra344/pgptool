@@ -12,6 +12,7 @@ A cross-platform desktop app (macOS Apple Silicon + Windows) for managing PGP ke
 - **Passphrase prompts only when needed**, with a 5-minute session unlock cache and a manual "Lock keys" button
 - **Signature verification** — shows who signed a decrypted message, warns on unsigned ones
 - **Export** — share public keys, back up private keys (copy or save as `.asc`)
+- **Export/import the whole keyring** — one `.asc` bundle (full backup with private keys, or public-only for sharing); restore via "Import file…" or `gpg --import`
 - Light/dark theme following the system
 
 ## Development

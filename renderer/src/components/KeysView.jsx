@@ -46,7 +46,7 @@ function KeyCard({ keyData, toast, onExport, onDelete }) {
 }
 
 export default function KeysView({
-  active, keys, toast, onGenerate, onImportFile, onImportPaste, onExport, onDelete,
+  active, keys, toast, onGenerate, onImportFile, onImportPaste, onExport, onDelete, onExportAll,
 }) {
   const [search, setSearch] = useState('');
 
@@ -68,6 +68,11 @@ export default function KeysView({
           <p className="sub">Your keypairs and your contacts' public keys.</p>
         </div>
         <div className="header-actions">
+          {keys.length > 0 && (
+            <button className="btn" onClick={onExportAll} title="Back up or share your whole keyring">
+              Export all…
+            </button>
+          )}
           <button className="btn" onClick={onImportFile}>Import file…</button>
           <button className="btn" onClick={onImportPaste}>Paste key…</button>
           <button className="btn primary" onClick={onGenerate}>＋ New keypair</button>

@@ -248,6 +248,37 @@ ipcMain.handle('keys:exportFile', wrap(async ({ fingerprint, includePrivate, sug
   return filePath;
 }));
 
+ipcMain.handle('keys:exportAll', wrap(async ({ includePrivate }) => {
+  const store = loadStore();
+  if (store.keys.length === 0) throw new Error('No keys to export');
+  // One .asc file of concatenated armored blocks — restorable by this app's
+  // import (which splits blocks) and by GnuPG (gpg --import).
+  const parts = [];
+  let privCount = 0;
+  let pubCount = 0;
+  for (const entry of store.keys) {
+    if (entry.isPrivate && includePrivate) {
+      parts.push(entry.armored.trim());
+      privCount += 1;
+    } else {
+      const key = await openpgp.readKey({ armoredKey: entry.armored });
+      parts.push((key.isPrivate() ? key.toPublic() : key).armor().trim());
+      pubCount += 1;
+    }
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    title: includePrivate ? 'Save keyring backup' : 'Save public keys',
+    defaultPath: includePrivate
+      ? `pgptool-backup-${date}.asc`
+      : `pgptool-public-keys-${date}.asc`,
+    filters: [{ name: 'ASCII-armored keys', extensions: ['asc'] }],
+  });
+  if (canceled || !filePath) return null;
+  fs.writeFileSync(filePath, parts.join('\n\n') + '\n', { mode: includePrivate ? 0o600 : 0o644 });
+  return { path: filePath, privCount, pubCount };
+}));
+
 ipcMain.handle('session:lock', wrap(async () => {
   unlockedKeys.clear();
   return true;

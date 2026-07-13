@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('pgp', {
   deleteKey: invoke('keys:delete'),
   exportKey: invoke('keys:export'),
   exportKeyFile: invoke('keys:exportFile'),
+  exportAll: invoke('keys:exportAll'),
   lockSession: invoke('session:lock'),
   encrypt: invoke('pgp:encrypt'),
   decrypt: invoke('pgp:decrypt'),

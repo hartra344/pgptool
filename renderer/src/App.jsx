@@ -11,6 +11,7 @@ import {
   GenerateModal,
   PasteModal,
   ExportModal,
+  ExportAllModal,
 } from './components/Modals.jsx';
 
 let toastSeq = 0;
@@ -27,6 +28,7 @@ export default function App() {
   const [genOpen, setGenOpen] = useState(false);
   const [pasteReq, setPasteReq] = useState(null); // { text }
   const [exportReq, setExportReq] = useState(null); // { key, includePrivate, armored }
+  const [exportAllOpen, setExportAllOpen] = useState(false);
 
   const toast = useCallback((message, type = 'info') => {
     const id = ++toastSeq;
@@ -273,6 +275,7 @@ export default function App() {
           onImportPaste={() => setPasteReq({ text: '' })}
           onExport={exportKey}
           onDelete={deleteKey}
+          onExportAll={() => setExportAllOpen(true)}
         />
       </main>
 
@@ -318,6 +321,9 @@ export default function App() {
             if (ok) setPasteReq(null);
           }}
         />
+      )}
+      {exportAllOpen && (
+        <ExportAllModal keys={keys} toast={toast} onClose={() => setExportAllOpen(false)} />
       )}
       {exportReq && (
         <ExportModal
