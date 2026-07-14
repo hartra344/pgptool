@@ -1,27 +1,66 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const openpgp = require('openpgp');
+const { autoUpdater } = require('electron-updater');
 
 // ---------------------------------------------------------------------------
-// Key store: armored keys persisted as JSON in the app's userData directory.
-// Private keys are stored in their armored form, which keeps them protected
-// by their passphrase (if they have one). Passphrases are never persisted.
+// Key store: armored keys persisted in the app's userData directory. The whole
+// store is encrypted at rest with the OS keychain (Keychain on macOS, DPAPI on
+// Windows) via Electron's safeStorage, written as { sealed: <base64> }. Older
+// plaintext { keys: [...] } stores are still readable and get sealed on the
+// next save. Passphrases are never persisted.
 // ---------------------------------------------------------------------------
 
 const storePath = () => path.join(app.getPath('userData'), 'keys.json');
 
 function loadStore() {
+  let raw;
   try {
-    return JSON.parse(fs.readFileSync(storePath(), 'utf8'));
+    raw = fs.readFileSync(storePath(), 'utf8');
   } catch {
-    return { keys: [] };
+    return { keys: [] }; // no store yet
   }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Don't fall back to an empty store here: a later save would wipe the
+    // (possibly recoverable) keyring.
+    throw new Error(`Key store is unreadable — inspect ${storePath()}`);
+  }
+  if (parsed && typeof parsed.sealed === 'string') {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('The key store is encrypted with the OS keychain, which is unavailable right now');
+    }
+    try {
+      return JSON.parse(safeStorage.decryptString(Buffer.from(parsed.sealed, 'base64')));
+    } catch {
+      throw new Error('Could not decrypt the key store with the OS keychain');
+    }
+  }
+  return Array.isArray(parsed?.keys) ? parsed : { keys: [] };
 }
 
 function saveStore(store) {
   fs.mkdirSync(path.dirname(storePath()), { recursive: true });
-  fs.writeFileSync(storePath(), JSON.stringify(store, null, 2), { mode: 0o600 });
+  const json = JSON.stringify(store, null, 2);
+  const payload = safeStorage.isEncryptionAvailable()
+    ? JSON.stringify({ sealed: safeStorage.encryptString(json).toString('base64') })
+    : json;
+  fs.writeFileSync(storePath(), payload, { mode: 0o600 });
+}
+
+// Seal a pre-existing plaintext store the first time this version runs.
+function migrateStoreToSealed() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(storePath(), 'utf8'));
+    if (Array.isArray(parsed?.keys) && safeStorage.isEncryptionAvailable()) {
+      saveStore(parsed);
+    }
+  } catch {
+    // No store yet, or unreadable — surfaced properly on first real access.
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +101,58 @@ async function keyMeta(entry) {
     created: key.getCreationTime().toISOString(),
     expires: expiration instanceof Date ? expiration.toISOString() : null,
     algorithm: key.getAlgorithmInfo().algorithm,
+  };
+}
+
+// Decode the key-flags bitfield from the most recent signature that has one.
+function usageFromSignatures(signatures) {
+  const withFlags = (signatures || []).filter((s) => s?.keyFlags?.length);
+  if (withFlags.length === 0) return [];
+  withFlags.sort((a, b) => (b.created?.getTime() || 0) - (a.created?.getTime() || 0));
+  const flags = withFlags[0].keyFlags[0];
+  const usage = [];
+  if (flags & 0x01) usage.push('certify');
+  if (flags & 0x02) usage.push('sign');
+  if (flags & 0x0c) usage.push('encrypt');
+  if (flags & 0x20) usage.push('authenticate');
+  return usage;
+}
+
+function algorithmLabel(info) {
+  if (info.curve) return `${info.algorithm} (${info.curve})`;
+  if (info.bits) return `${info.algorithm} (${info.bits}-bit)`;
+  return info.algorithm;
+}
+
+async function keyDetails(entry) {
+  const key = await openpgp.readKey({ armoredKey: entry.armored });
+  const meta = await keyMeta(entry);
+
+  const describe = async (k, usage) => {
+    const expiration = k === key ? meta.expires
+      : await k.getExpirationTime().then((d) => (d instanceof Date ? d.toISOString() : null)).catch(() => null);
+    return {
+      keyID: k.getKeyID().toHex().toUpperCase(),
+      fingerprint: k.getFingerprint().toUpperCase(),
+      algorithm: algorithmLabel(k.getAlgorithmInfo()),
+      created: k.getCreationTime().toISOString(),
+      expires: expiration,
+      usage,
+    };
+  };
+
+  const primaryUsage = usageFromSignatures(
+    key.users.flatMap((u) => u.selfCertifications || [])
+  );
+  const subkeys = [];
+  for (const sub of key.getSubkeys()) {
+    subkeys.push(await describe(sub, usageFromSignatures(sub.bindingSignatures)));
+  }
+  return {
+    ...meta,
+    added: entry.added,
+    primary: await describe(key, primaryUsage),
+    subkeys,
   };
 }
 
@@ -167,6 +258,10 @@ ipcMain.handle('keys:list', wrap(async () => {
     list.push({ ...(await keyMeta(entry)), added: entry.added });
   }
   return list;
+}));
+
+ipcMain.handle('keys:details', wrap(async ({ fingerprint }) => {
+  return keyDetails(await getStoredKey(fingerprint));
 }));
 
 ipcMain.handle('keys:generate', wrap(async ({ name, email, passphrase, anonymous }) => {
@@ -383,6 +478,55 @@ ipcMain.handle('pgp:decrypt', wrap(async ({ armored, passphrase, fingerprint: ta
 }));
 
 // ---------------------------------------------------------------------------
+// Auto-update: checks the GitHub release feed on launch, downloads in the
+// background, and lets the renderer offer a "restart to update" action.
+// Only active in packaged builds — dev runs report the updater as unavailable.
+// ---------------------------------------------------------------------------
+
+const updaterAvailable = () => app.isPackaged;
+const updateState = { status: 'idle', version: null, error: null };
+
+function setUpdateState(status, version = null, error = null) {
+  Object.assign(updateState, { status, version, error });
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('update:state', { ...updateState });
+  }
+}
+
+function setupAutoUpdater() {
+  if (!updaterAvailable()) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('checking-for-update', () => setUpdateState('checking'));
+  autoUpdater.on('update-available', (info) => setUpdateState('downloading', info.version));
+  autoUpdater.on('update-not-available', () => setUpdateState('up-to-date'));
+  autoUpdater.on('update-downloaded', (info) => setUpdateState('ready', info.version));
+  autoUpdater.on('error', (err) => setUpdateState('error', null, err.message));
+  autoUpdater.checkForUpdates().catch(() => {
+    // Startup check is best-effort (offline, private repo, …) — the 'error'
+    // event above already recorded the failure.
+  });
+}
+
+ipcMain.handle('app:info', wrap(async () => ({
+  version: app.getVersion(),
+  updaterAvailable: updaterAvailable(),
+  updateState: { ...updateState },
+})));
+
+ipcMain.handle('update:check', wrap(async () => {
+  if (!updaterAvailable()) throw new Error('Updates only work in the installed app');
+  await autoUpdater.checkForUpdates();
+  return { ...updateState };
+}));
+
+ipcMain.handle('update:install', wrap(async () => {
+  if (updateState.status !== 'ready') throw new Error('No update has been downloaded yet');
+  autoUpdater.quitAndInstall();
+  return true;
+}));
+
+// ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
 
@@ -409,7 +553,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  createWindow();
+  migrateStoreToSealed();
+  setupAutoUpdater();
+  if (!process.env.PGPTOOL_HEADLESS_TEST) createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -418,3 +564,6 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+// Exposed for the headless test harness (PGPTOOL_HEADLESS_TEST).
+module.exports = { loadStore, saveStore, migrateStoreToSealed, keyDetails };

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { call, isDemo } from './api.js';
+import { call, isDemo, onUpdateState } from './api.js';
+import KeyDetailModal from './components/KeyDetailModal.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import EncryptView from './components/EncryptView.jsx';
 import DecryptView from './components/DecryptView.jsx';
@@ -29,6 +30,11 @@ export default function App() {
   const [pasteReq, setPasteReq] = useState(null); // { text }
   const [exportReq, setExportReq] = useState(null); // { key, includePrivate, armored }
   const [exportAllOpen, setExportAllOpen] = useState(false);
+  const [detailFpr, setDetailFpr] = useState(null); // fingerprint of key shown in detail modal
+
+  // App version + auto-update status (packaged builds only)
+  const [appInfo, setAppInfo] = useState(null);
+  const [updateState, setUpdateState] = useState(null);
 
   const toast = useCallback((message, type = 'info') => {
     const id = ++toastSeq;
@@ -47,6 +53,42 @@ export default function App() {
   useEffect(() => {
     refreshKeys();
   }, [refreshKeys]);
+
+  useEffect(() => {
+    call('appInfo')
+      .then((info) => {
+        setAppInfo(info);
+        setUpdateState(info.updateState);
+      })
+      .catch(() => {});
+    return onUpdateState(setUpdateState);
+  }, []);
+
+  // One toast when an update finishes downloading; installing stays a
+  // user-initiated action (the button in the sidebar).
+  const announcedUpdate = useRef(null);
+  useEffect(() => {
+    if (updateState?.status === 'ready' && announcedUpdate.current !== updateState.version) {
+      announcedUpdate.current = updateState.version;
+      toast(`Update v${updateState.version} downloaded — restart to install`, 'success');
+    }
+  }, [updateState, toast]);
+
+  const checkForUpdates = useCallback(async () => {
+    try {
+      await call('checkForUpdates');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }, [toast]);
+
+  const installUpdate = useCallback(async () => {
+    try {
+      await call('installUpdate');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }, [toast]);
 
   // ---- promise-based prompts ----------------------------------------------
 
@@ -241,6 +283,10 @@ export default function App() {
 
   // ---------------------------------------------------------------------------
 
+  // Derived from the live key list so the detail modal closes itself when the
+  // key is deleted (and reflects unlock-status changes immediately).
+  const detailKey = detailFpr ? keys.find((k) => k.fingerprint === detailFpr) : null;
+
   return (
     <div id="app">
       <Sidebar
@@ -249,6 +295,10 @@ export default function App() {
         keys={keys}
         onLock={lockSession}
         isDemo={isDemo}
+        appInfo={appInfo}
+        updateState={updateState}
+        onCheckUpdates={checkForUpdates}
+        onInstallUpdate={installUpdate}
       />
       <main id="main">
         <EncryptView
@@ -276,6 +326,7 @@ export default function App() {
           onExport={exportKey}
           onDelete={deleteKey}
           onExportAll={() => setExportAllOpen(true)}
+          onDetails={(key) => setDetailFpr(key.fingerprint)}
         />
       </main>
 
@@ -324,6 +375,15 @@ export default function App() {
       )}
       {exportAllOpen && (
         <ExportAllModal keys={keys} toast={toast} onClose={() => setExportAllOpen(false)} />
+      )}
+      {detailKey && (
+        <KeyDetailModal
+          keyData={detailKey}
+          toast={toast}
+          onExport={exportKey}
+          onDelete={deleteKey}
+          onClose={() => setDetailFpr(null)}
+        />
       )}
       {exportReq && (
         <ExportModal

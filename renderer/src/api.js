@@ -38,6 +38,31 @@ hF4DDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMOxDEMO
 
 const demo = {
   listKeys: async () => [...demoKeys],
+  keyDetails: async ({ fingerprint }) => {
+    const k = demoKeys.find((x) => x.fingerprint === fingerprint) || demoKeys[0];
+    return {
+      ...k,
+      added: '2026-07-10T00:00:00.000Z',
+      primary: {
+        keyID: k.keyID,
+        fingerprint: k.fingerprint,
+        algorithm: 'eddsaLegacy (ed25519)',
+        created: k.created,
+        expires: k.expires,
+        usage: ['certify', 'sign'],
+      },
+      subkeys: [
+        {
+          keyID: k.keyID.split('').reverse().join(''),
+          fingerprint: k.fingerprint.split('').reverse().join(''),
+          algorithm: 'ecdh (curve25519)',
+          created: k.created,
+          expires: k.expires,
+          usage: ['encrypt'],
+        },
+      ],
+    };
+  },
   generateKey: async ({ name, email, anonymous }) => {
     demoKeys.push({
       ...demoKeys[0],
@@ -64,6 +89,15 @@ const demo = {
       : demoKeys.length,
   }),
   lockSession: async () => true,
+  appInfo: async () => ({
+    version: 'demo',
+    updaterAvailable: false,
+    updateState: { status: 'idle', version: null, error: null },
+  }),
+  checkForUpdates: async () => {
+    throw new Error('Updates only work in the installed app');
+  },
+  installUpdate: async () => true,
   encrypt: async () => DEMO_ARMORED,
   decrypt: async () => ({
     text: 'This is a demo decryption. Run the desktop app for real crypto.',
@@ -82,6 +116,13 @@ export async function call(name, payload) {
     throw err;
   }
   return res.data;
+}
+
+// Subscribe to update-state pushes from the main process. Returns an
+// unsubscribe function; a no-op in demo mode.
+export function onUpdateState(callback) {
+  if (isDemo || !window.pgp.onUpdateState) return () => {};
+  return window.pgp.onUpdateState(callback);
 }
 
 // --- small shared helpers -------------------------------------------------

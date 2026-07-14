@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { avatarHue, formatFingerprint, initials, keyLabel, parseUserID } from '../api.js';
 
-function KeyCard({ keyData, toast, onExport, onDelete }) {
+function KeyCard({ keyData, toast, onExport, onDelete, onDetails }) {
   const name = keyLabel(keyData);
   const { email } = parseUserID(keyData.userIDs[0]);
   const hue = avatarHue(keyData.fingerprint);
@@ -11,8 +11,14 @@ function KeyCard({ keyData, toast, onExport, onDelete }) {
     toast('Fingerprint copied', 'success');
   };
 
+  // The card opens the detail view, except when an inner button was clicked.
+  const openDetails = (e) => {
+    if (e.target.closest('button')) return;
+    onDetails(keyData);
+  };
+
   return (
-    <div className="key-card">
+    <div className="key-card clickable" onClick={openDetails} title="Click for key details">
       <div className="avatar" style={{ background: `hsl(${hue} 55% 45%)` }}>
         {initials(keyData.userIDs[0])}
       </div>
@@ -46,7 +52,7 @@ function KeyCard({ keyData, toast, onExport, onDelete }) {
 }
 
 export default function KeysView({
-  active, keys, toast, onGenerate, onImportFile, onImportPaste, onExport, onDelete, onExportAll,
+  active, keys, toast, onGenerate, onImportFile, onImportPaste, onExport, onDelete, onExportAll, onDetails,
 }) {
   const [search, setSearch] = useState('');
 
@@ -116,7 +122,7 @@ export default function KeysView({
           ) : (
             <div className="key-list">
               {mine.map((k) => (
-                <KeyCard key={k.fingerprint} keyData={k} toast={toast} onExport={onExport} onDelete={onDelete} />
+                <KeyCard key={k.fingerprint} keyData={k} toast={toast} onExport={onExport} onDelete={onDelete} onDetails={onDetails} />
               ))}
             </div>
           )}
@@ -131,7 +137,7 @@ export default function KeysView({
           ) : (
             <div className="key-list">
               {contacts.map((k) => (
-                <KeyCard key={k.fingerprint} keyData={k} toast={toast} onExport={onExport} onDelete={onDelete} />
+                <KeyCard key={k.fingerprint} keyData={k} toast={toast} onExport={onExport} onDelete={onDelete} onDetails={onDetails} />
               ))}
             </div>
           )}

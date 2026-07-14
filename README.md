@@ -13,6 +13,9 @@ A cross-platform desktop app (macOS Apple Silicon + Windows) for managing PGP ke
 - **Signature verification** — shows who signed a decrypted message, warns on unsigned ones
 - **Export** — share public keys, back up private keys (copy or save as `.asc`)
 - **Export/import the whole keyring** — one `.asc` bundle (full backup with private keys, or public-only for sharing); restore via "Import file…" or `gpg --import`
+- **Key detail view** — click any key to see its identities, a large copyable fingerprint for out-of-band verification, and the primary key + subkeys with their capabilities
+- **Encrypted key store** — the keyring file is sealed with the OS keychain (macOS Keychain / Windows DPAPI) at rest
+- **Auto-update** — installed builds check GitHub Releases on launch, download in the background, and offer "Restart to update" (see caveats below)
 - Light/dark theme following the system
 
 ## Development
@@ -42,8 +45,14 @@ Note: the macOS build is unsigned by default. To distribute it beyond your own m
 - `src/preload.js` — minimal `window.pgp` bridge (context isolation + sandbox enabled)
 - `renderer/` — React app (Vite); talks to main only through the bridge
 
+## Auto-update caveats
+
+- The updater reads release metadata from this GitHub repo. **It only works if the repo is public** — against a private repo the startup check fails quietly and "Check for updates" reports an error.
+- On **macOS**, installing updates requires the app to be code-signed; unsigned builds can check and download but the install will fail. **Windows** NSIS builds update fine unsigned.
+- The release workflow uploads `latest*.yml` + `.blockmap` metadata alongside the installers — the updater needs those files on each release.
+
 ## Security notes
 
-- Keys are stored armored in `keys.json` under the app's user-data directory (`~/Library/Application Support/pgptool` on macOS, `%APPDATA%/pgptool` on Windows).
-- Private keys stay passphrase-encrypted at rest. **If you import a private key that has no passphrase, it is stored unprotected** — consider adding a passphrase to it first (e.g. `gpg --edit-key <id> passwd`).
+- Keys live in `keys.json` under the app's user-data directory (`~/Library/Application Support/pgptool` on macOS, `%APPDATA%/pgptool` on Windows). The whole file is encrypted at rest with the OS keychain (Electron `safeStorage`); older plaintext stores are sealed automatically on first launch.
+- Independently of the store encryption, private keys stay passphrase-encrypted. **If you import a private key that has no passphrase, only the store-level encryption protects it** — consider adding a passphrase to it first (e.g. `gpg --edit-key <id> passwd`).
 - Passphrases are used transiently; successful unlocks are cached in main-process memory for 5 minutes (sliding), cleared by "Lock keys" or quitting.

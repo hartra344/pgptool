@@ -15,7 +15,41 @@ const KeyIcon = ({ size = 17 }) => (
   </svg>
 );
 
-export default function Sidebar({ view, onNavigate, keys, onLock, isDemo }) {
+function UpdateStatus({ appInfo, updateState, onCheckUpdates, onInstallUpdate, isDemo }) {
+  if (!appInfo || isDemo) return null;
+  const version = <span className="app-version">v{appInfo.version}</span>;
+
+  if (updateState?.status === 'ready') {
+    return (
+      <div className="update-row">
+        {version}
+        <button className="update-link ready" onClick={onInstallUpdate}>
+          Restart to update to v{updateState.version}
+        </button>
+      </div>
+    );
+  }
+  const statusText = {
+    checking: 'Checking for updates…',
+    downloading: updateState?.version ? `Downloading v${updateState.version}…` : 'Downloading update…',
+    'up-to-date': 'Up to date',
+  }[updateState?.status];
+
+  return (
+    <div className="update-row">
+      {version}
+      {statusText ? (
+        <span className="update-text">{statusText}</span>
+      ) : appInfo.updaterAvailable ? (
+        <button className="update-link" onClick={onCheckUpdates}>Check for updates</button>
+      ) : null}
+    </div>
+  );
+}
+
+export default function Sidebar({
+  view, onNavigate, keys, onLock, isDemo, appInfo, updateState, onCheckUpdates, onInstallUpdate,
+}) {
   const unlockedCount = keys.filter((k) => k.isPrivate && k.unlocked).length;
 
   const items = [
@@ -57,6 +91,13 @@ export default function Sidebar({ view, onNavigate, keys, onLock, isDemo }) {
             ? `${unlockedCount} key${unlockedCount > 1 ? 's' : ''} unlocked`
             : 'All keys locked'}
         </div>
+        <UpdateStatus
+          appInfo={appInfo}
+          updateState={updateState}
+          onCheckUpdates={onCheckUpdates}
+          onInstallUpdate={onInstallUpdate}
+          isDemo={isDemo}
+        />
       </div>
     </aside>
   );

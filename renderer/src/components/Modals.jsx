@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { call, isDemo, keyLabel, parseUserID } from '../api.js';
 
-function ModalShell({ children, onClose, wide }) {
+export function ModalShell({ children, onClose, wide }) {
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
