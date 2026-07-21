@@ -1,6 +1,6 @@
 {
   "name": "pgptool",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Manage PGP keys and encrypt/decrypt messages",
   "main": "src/main.js",
   "author": "Travis Vu <ttha3928@gmail.com>",
