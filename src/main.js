@@ -1,6 +1,24 @@
 const { app, BrowserWindow, ipcMain, dialog, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
+// Electron's Node is backed by BoringSSL, which has no AES-KW support. Node's
+// WebCrypto only fails once the wrap/unwrap operation runs (a generic
+// OperationError), which openpgp.js misreads as tampering and reports as
+// "Key Data Integrity failed" on every ECDH decrypt. openpgp.js falls back to
+// its pure-JS AES-KW only when the key *import* throws NotSupportedError — so
+// reject AES-KW imports up front to route it there.
+const { webcrypto } = require('crypto');
+const originalImportKey = webcrypto.subtle.importKey.bind(webcrypto.subtle);
+webcrypto.subtle.importKey = (format, keyData, algorithm, ...rest) => {
+  if ((algorithm?.name || algorithm) === 'AES-KW') {
+    const err = new Error('AES-KW is not supported by BoringSSL');
+    err.name = 'NotSupportedError';
+    return Promise.reject(err);
+  }
+  return originalImportKey(format, keyData, algorithm, ...rest);
+};
+
 const openpgp = require('openpgp');
 const { autoUpdater } = require('electron-updater');
 
@@ -403,7 +421,7 @@ ipcMain.handle('pgp:encrypt', wrap(async ({ text, recipientFingerprints, signerF
   });
 }));
 
-ipcMain.handle('pgp:decrypt', wrap(async ({ armored, passphrase, fingerprint: targetFingerprint }) => {
+async function decryptMessage({ armored, passphrase, fingerprint: targetFingerprint }) {
   let message;
   try {
     message = await openpgp.readMessage({ armoredMessage: armored });
@@ -448,11 +466,22 @@ ipcMain.handle('pgp:decrypt', wrap(async ({ armored, passphrase, fingerprint: ta
       firstError = firstError || err;
       continue;
     }
-    const { data, signatures } = await openpgp.decrypt({
-      message,
-      decryptionKeys: [decryptionKey],
-      verificationKeys: verificationKeys.length ? verificationKeys : undefined,
-    });
+    let data, signatures;
+    try {
+      // Re-parse per attempt: a message's packet data is stream-backed and
+      // gets consumed by a failed decrypt, so the object is single-use.
+      ({ data, signatures } = await openpgp.decrypt({
+        message: await openpgp.readMessage({ armoredMessage: armored }),
+        decryptionKeys: [decryptionKey],
+        verificationKeys: verificationKeys.length ? verificationKeys : undefined,
+      }));
+    } catch (err) {
+      // This key couldn't open the message. With hidden recipient IDs
+      // (gpg --throw-keyids) every private key is a candidate, so failures
+      // here are expected — move on to the next key.
+      firstError = firstError || err;
+      continue;
+    }
 
     let signature = null;
     if (signatures && signatures.length > 0) {
@@ -474,8 +503,17 @@ ipcMain.handle('pgp:decrypt', wrap(async ({ armored, passphrase, fingerprint: ta
     }
     return { text: data, decryptedWith: entry.fingerprint, signature };
   }
-  throw firstError || new Error('Decryption failed');
-}));
+  // Passphrase problems keep their code + meta so the UI can prompt.
+  if (firstError?.code) throw firstError;
+  const err = new Error(
+    'Could not decrypt this message with any of your private keys — it may have been ' +
+    'encrypted to a different key, or the message text is damaged' +
+    (firstError ? ` (${firstError.message.replace(/^Error decrypting message: /, '')})` : '')
+  );
+  throw err;
+}
+
+ipcMain.handle('pgp:decrypt', wrap(decryptMessage));
 
 // ---------------------------------------------------------------------------
 // Auto-update: checks the GitHub release feed on launch, downloads in the
@@ -566,4 +604,4 @@ app.on('window-all-closed', () => {
 });
 
 // Exposed for the headless test harness (PGPTOOL_HEADLESS_TEST).
-module.exports = { loadStore, saveStore, migrateStoreToSealed, keyDetails };
+module.exports = { loadStore, saveStore, migrateStoreToSealed, keyDetails, decryptMessage };
