@@ -40,6 +40,7 @@
   "build": {
     "appId": "com.travisvu.pgptool",
     "productName": "PGP Tool",
+    "artifactName": "PGP-Tool-${version}-${arch}.${ext}",
     "publish": {
       "provider": "github",
       "owner": "hartra344",
@@ -83,7 +84,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "PGP-Tool-Setup-${version}.exe"
     }
   }
 }

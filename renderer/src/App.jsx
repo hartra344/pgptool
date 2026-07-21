@@ -74,6 +74,16 @@ export default function App() {
     }
   }, [updateState, toast]);
 
+  // "Up to date" is transient — fall back to the check link after a moment.
+  useEffect(() => {
+    if (updateState?.status !== 'up-to-date') return;
+    const t = setTimeout(
+      () => setUpdateState((s) => (s?.status === 'up-to-date' ? { ...s, status: 'idle' } : s)),
+      4000
+    );
+    return () => clearTimeout(t);
+  }, [updateState]);
+
   const checkForUpdates = useCallback(async () => {
     try {
       await call('checkForUpdates');
